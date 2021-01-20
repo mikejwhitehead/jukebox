@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/mikejwhitehead/jukebox/config"
 	"github.com/mikejwhitehead/jukebox/sonos"
-	musicservices "github.com/szatmary/sonos/MusicServices"
+	"github.com/tarm/serial"
 )
 
 func main() {
@@ -17,21 +16,23 @@ func main() {
 		log.Fatalln("Fatal: ", err.Error())
 	}
 
-	zp, err := sonos.GetSpeaker(cfg.Room)
+	_, err = sonos.GetSpeaker(cfg.Room)
 	if err != nil {
 		log.Fatalln("Fatal: ", err.Error())
 	}
 
-	listArgs := musicservices.ListAvailableServicesArgs{}
-	svc, err := zp.MusicServices.ListAvailableServices(zp.HttpClient, &listArgs)
+	c := &serial.Config{Name: cfg.InputDevice, Baud: 9600}
+	s, err := serial.OpenPort(c)
 	if err != nil {
-		log.Fatalln("Fatal: ", err.Error())
+			log.Fatal(err)
 	}
 
-	fmt.Println(svc.AvailableServiceTypeList)
+	buf := make([]byte, 128)
+	_, err = s.Read(buf)
+	if err != nil {
+			log.Fatal(err)
+	}
 
-	// if err := zp.Play(); err != nil {
-	// 	log.Fatalln("Fatal: ", err.Error())
-	// }
+	log.Println(string(buf))
 
 }
