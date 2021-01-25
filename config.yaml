@@ -1,2 +1,2 @@
 room: Outside TV
-input_device: /dev/tty.usbmodem141101
+input_device: /dev/ttyUSB1
