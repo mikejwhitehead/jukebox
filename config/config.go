@@ -42,7 +42,6 @@ func Load(filename string) (*Config, error) {
 	if cfg.InputDevice == "" {
 		return nil, ErrorConfigInputDeviceMissing
 	}
-	
+
 	return &cfg, nil
 }
-

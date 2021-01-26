@@ -10,9 +10,9 @@ import (
 
 // Sonos client
 var Sonos = connect()
+
 // Speakers available on local network
 var Speakers = findSpeakers()
-
 
 var (
 	// ErrorRoomNotFound error
@@ -20,7 +20,6 @@ var (
 	// ErrorPlaylistNotFound error
 	ErrorPlaylistNotFound error = errors.New("playlist not found")
 )
-
 
 func connect() *sonos.Sonos {
 	s, err := sonos.NewSonos()
@@ -33,7 +32,7 @@ func connect() *sonos.Sonos {
 
 // findSpeakers returns all zone speakers
 func findSpeakers() []sonos.ZonePlayer {
-	
+
 	var players []sonos.ZonePlayer
 
 	found, err := Sonos.Search()
@@ -42,7 +41,7 @@ func findSpeakers() []sonos.ZonePlayer {
 	}
 	to := time.After(10 * time.Second)
 
-	find:
+find:
 	for {
 		select {
 		case <-to:
@@ -67,7 +66,6 @@ func GetSpeaker(name string) (*sonos.ZonePlayer, error) {
 	if zp == nil {
 		return nil, ErrorRoomNotFound
 	}
-
 
 	return zp, nil
 }

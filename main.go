@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mikejwhitehead/jukebox/config"
+	"github.com/mikejwhitehead/jukebox/ent/card"
 	"github.com/mikejwhitehead/jukebox/sonos"
 	"github.com/tarm/serial"
 
@@ -16,23 +17,10 @@ import (
 )
 
 func init() {
-	// Load config from file
-	cfg, err := config.Load("./config.yaml")
-	if err != nil {
-		log.Fatalln("Fatal: ", err.Error())
-	}
-
-	_, err = sonos.GetSpeaker(cfg.Room)
-	if err != nil {
-		log.Fatalln("Fatal: ", err.Error())
-	}
-
 }
 
-var cfg = &config.Config{}
-
-func listen() {
-	c := &serial.Config{Name: cfg.InputDevice, Baud: 9600}
+func listen(input string, output chan string) {
+	c := &serial.Config{Name: input, Baud: 9600}
 	s, err := serial.OpenPort(c)
 	if err != nil {
 		log.Fatal(err)
@@ -44,13 +32,40 @@ func listen() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		cardID := string(buf[:n])
 
-		log.Println(string(buf[:n]))
+		output <- cardID
 	}
 
 }
 
+func process(ctx context.Context, client *ent.Client, cardID string) {
+	log.Println(cardID)
+
+	c, err := client.Card.
+		Query().
+		Where(card.NameEQ(cardID)).
+		Only(ctx)
+	if err != nil {
+		log.Println(cardID, " not found")
+		return
+	}
+
+	log.Println(cardID, " playlist set to ", c.Edges.Playlist.Name)
+
+}
+
 func main() {
+	// Load config from file
+	cfg, err := config.Load("./config.yaml")
+	if err != nil {
+		log.Fatalln("Fatal: ", err.Error())
+	}
+
+	_, err = sonos.GetSpeaker(cfg.Room)
+	if err != nil {
+		log.Fatalln("Fatal: ", err.Error())
+	}
 
 	client, err := ent.Open("sqlite3", "file:ent.db?mode=rwc&cache=shared&_fk=1")
 	if err != nil {
@@ -62,24 +77,31 @@ func main() {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	plist, err := createPlaylist(ctx, client, "tonights music 2", "http://play.list")
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
-	cardName := "4D:A2:50:23"
+	output := make(chan string)
+	go listen(cfg.InputDevice, output)
 
-	card, err := createCard(ctx, client, cardName, plist.ID)
-	if err != nil {
-		log.Fatalf("error: %v", err)
+	for id := range output {
+		process(ctx, client, id)
 	}
 
-	_, err = createCardScan(ctx, client, card.ID, plist.ID)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
+	// plist, err := createPlaylist(ctx, client, "tonights music 2", "http://play.list")
+	// if err != nil {
+	// 	log.Fatalf("error: %v", err)
+	// }
+	// cardName := "4D:A2:50:23"
+
+	// card, err := createCard(ctx, client, cardName, plist.ID)
+	// if err != nil {
+	// 	log.Fatalf("error: %v", err)
+	// }
+
+	// _, err = createCardScan(ctx, client, card.ID, plist.ID)
+	// if err != nil {
+	// 	log.Fatalf("error: %v", err)
+	// }
 
 }
 
