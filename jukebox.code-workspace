@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"terminal.integrated.env.linux": {
+			"PATH": "${env:PATH}:${env:GOPATH}/bin",
+			"GO111MODULE": "on",
+		}
+	}
+}
