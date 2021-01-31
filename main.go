@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/mikejwhitehead/jukebox/config"
 	"github.com/mikejwhitehead/jukebox/ent/card"
@@ -9,7 +13,6 @@ import (
 	"github.com/tarm/serial"
 
 	"context"
-	"log"
 
 	"github.com/mikejwhitehead/jukebox/ent"
 
@@ -17,50 +20,78 @@ import (
 )
 
 func init() {
+	// Log as JSON instead of the default ASCII formatter.
+	log.SetFormatter(&log.TextFormatter{})
+
+	// Output to stdout instead of the default stderr
+	// Can be any io.Writer, see below for File example
+	log.SetOutput(os.Stdout)
+
+	// Only log the warning severity or above.
+	log.SetLevel(log.InfoLevel)
 }
 
-func listen(input string, output chan string) {
-	c := &serial.Config{Name: input, Baud: 9600}
+func listen(device string) chan string {
+	c := &serial.Config{Name: device, Baud: 9600}
+	log.Infoln("connecting to serial port ", device)
 	s, err := serial.OpenPort(c)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for {
-		buf := make([]byte, 256)
-		n, err := s.Read(buf)
-		if err != nil {
-			log.Fatal(err)
+	input := make(chan string)
+	go func(chan string) {
+		for {
+			buf := make([]byte, 256)
+			n, err := s.Read(buf)
+			if err != nil {
+				log.Fatal(err)
+			}
+			scan := string(buf[:n])
+			cardID := strings.Replace(strings.TrimSpace(scan), "Tap card key : ", "", -1)
+			log.WithFields(log.Fields{
+				"Card":   cardID,
+				"Device": device,
+			}).Infoln("card read from scan")
+			input <- cardID
 		}
-		cardID := string(buf[:n])
+	}(input)
 
-		output <- cardID
-	}
+	log.WithFields(log.Fields{
+		"Device": device,
+	}).Infoln("listener started")
 
+	return input
 }
 
 func process(ctx context.Context, client *ent.Client, cardID string) {
-	log.Println(cardID)
+	entry := log.WithFields(log.Fields{
+		"Card": cardID,
+	})
 
+	entry.Infof("finding playlist for card")
 	c, err := client.Card.
 		Query().
 		Where(card.NameEQ(cardID)).
 		Only(ctx)
 	if err != nil {
-		log.Println(cardID, " not found")
+		entry.Warnln("card playlist not found")
 		return
 	}
 
-	log.Println(cardID, " playlist set to ", c.Edges.Playlist.Name)
-
+	entry.Data["Playlist"] = c.Edges.Playlist.Name
+	entry.Infoln("card playlist found")
 }
 
 func main() {
+	printFiglet()
 	// Load config from file
+	log.Infoln("reading from ./config.yaml")
 	cfg, err := config.Load("./config.yaml")
 	if err != nil {
 		log.Fatalln("Fatal: ", err.Error())
 	}
+	log.Info("config loaded successfully")
 
 	_, err = sonos.GetSpeaker(cfg.Room)
 	if err != nil {
@@ -80,10 +111,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	output := make(chan string)
-	go listen(cfg.InputDevice, output)
+	in := listen(cfg.InputDevice)
 
-	for id := range output {
+	for id := range in {
 		process(ctx, client, id)
 	}
 
@@ -145,4 +175,24 @@ func createCardScan(ctx context.Context, client *ent.Client, card, plist int) (*
 
 	log.Println("card scan was created: ", c)
 	return c, nil
+}
+
+func printFiglet() {
+
+	colorPurple := "\033[35m"
+
+	figlet := `
+*********************************************
+   _       _        _
+  (_)_   _| | _____| |__   _____  __
+  | | | | | |/ / _ | '_ \ / _ \ \/ /
+  | | |_| |   |  __| |_) | (_) >  <
+ _/ |\__,_|_|\_\___|_.__/ \___/_/\_\
+|__/
+	  
+*********************************************`
+
+	fmt.Println(string(colorPurple), figlet)
+
+	return
 }

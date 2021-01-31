@@ -1,2 +1,2 @@
 room: Outside TV
-input_device: /dev/ttyUSB1
+input_device: /dev/ttyUSB0
